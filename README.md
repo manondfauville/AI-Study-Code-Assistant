@@ -2,6 +2,8 @@
 
 A command-line AI assistant that helps users understand programming concepts and debug Python code. The user types a question or pastes a code snippet, and the agent uses tools to return a structured, helpful answer.
 
+> **Note:** This project uses the [Google Gemini API](https://aistudio.google.com/) as its AI backend. A free API key is available via Google AI Studio.
+
 ---
 
 ## Project goal
@@ -15,7 +17,7 @@ This system targets learners and developers who want fast, contextual help from 
 
 ## How it works
 
-The system uses a single intelligent agent powered by the [Anthropic Claude API](https://docs.anthropic.com/). When the user submits input, the agent classifies the intent and calls the appropriate tool:
+The system uses a single intelligent agent powered by the [Google Gemini API](https://aistudio.google.com/). When the user submits input, the agent classifies the intent and calls the appropriate tool:
 
 1. **Web search tool** — fetches up-to-date documentation or explanations (via `duckduckgo-search`)
 2. **Code analysis tool** — statically analyses a Python snippet using `ast` and `subprocess`
@@ -45,7 +47,7 @@ ai-study-assistant/
 ## Requirements
 
 - Python 3.10+
-- An [Anthropic API key](https://console.anthropic.com/)
+- A [Gemini API key](https://aistudio.google.com/) (free tier available)
 
 ---
 
@@ -75,7 +77,7 @@ cp .env.example .env
 Create a `.env` file at the root of the project (copy from `.env.example`):
 
 ```
-ANTHROPIC_API_KEY=your_api_key_here
+GEMINI_API_KEY=your_api_key_here
 ```
 
 Never commit your `.env` file — it is already listed in `.gitignore`.
@@ -109,7 +111,7 @@ pytest tests/
 
 | Package | Purpose |
 |---|---|
-| `anthropic` | Claude API SDK — the agent brain |
+| `google-generativeai` | Gemini API SDK — the agent brain |
 | `duckduckgo-search` | Web search tool for concept lookups |
 | `pytest` | Testing framework |
 
