@@ -11,7 +11,7 @@ import ast
 import subprocess
 import sys
 import textwrap
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 
 
 # ---------------------------------------------------------------------------
