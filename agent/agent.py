@@ -1,21 +1,22 @@
 """
 agent.py — Core agent logic for the AI Study & Code Assistant.
 
-Uses the Google Gemini API (free tier) instead of a paid API.
+Uses the Google Gemini API (free tier) with the official google-genai SDK.
 The agent sends the user's message to Gemini, which autonomously decides
-whether to call web_search, analyse_code, or neither.  Tool results are
+whether to call web_search, analyse_code, or neither. Tool results are
 fed back into the conversation until Gemini returns a final text answer.
 """
 
 import os
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from agent.tools import web_search, analyse_code
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-MODEL = "gemini-1.5-flash"
+MODEL = "gemini-2.5-flash"   # Free tier, fast, supports tool use
 
 SYSTEM_PROMPT = """\
 You are a helpful programming study assistant running in a terminal.
@@ -33,44 +34,44 @@ Rules:
 """
 
 # ---------------------------------------------------------------------------
-# Tool definitions (Gemini format)
+# Tool definitions (google-genai format)
 # ---------------------------------------------------------------------------
 
 GEMINI_TOOLS = [
-    genai.protos.Tool(
+    types.Tool(
         function_declarations=[
-            genai.protos.FunctionDeclaration(
+            types.FunctionDeclaration(
                 name="web_search",
                 description=(
                     "Search the web for up-to-date information about programming "
                     "concepts, libraries, language features, or documentation."
                 ),
-                parameters=genai.protos.Schema(
-                    type=genai.protos.Type.OBJECT,
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
                     properties={
-                        "query": genai.protos.Schema(
-                            type=genai.protos.Type.STRING,
+                        "query": types.Schema(
+                            type=types.Type.STRING,
                             description="The search query to look up.",
                         ),
-                        "max_results": genai.protos.Schema(
-                            type=genai.protos.Type.INTEGER,
-                            description="Maximum number of results to return (default 4).",
+                        "max_results": types.Schema(
+                            type=types.Type.INTEGER,
+                            description="Max number of results to return (default 4).",
                         ),
                     },
                     required=["query"],
                 ),
             ),
-            genai.protos.FunctionDeclaration(
+            types.FunctionDeclaration(
                 name="analyse_code",
                 description=(
                     "Analyse a Python code snippet for syntax errors using ast, "
                     "then execute it in a subprocess to catch runtime errors."
                 ),
-                parameters=genai.protos.Schema(
-                    type=genai.protos.Type.OBJECT,
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
                     properties={
-                        "snippet": genai.protos.Schema(
-                            type=genai.protos.Type.STRING,
+                        "snippet": types.Schema(
+                            type=types.Type.STRING,
                             description="The Python source code to analyse.",
                         ),
                     },
@@ -122,12 +123,7 @@ class StudyAgent:
                 "Copy .env.example to .env and add your free key from "
                 "https://aistudio.google.com/app/apikey"
             )
-        genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel(
-            model_name=MODEL,
-            system_instruction=SYSTEM_PROMPT,
-            tools=GEMINI_TOOLS,
-        )
+        self.client = genai.Client(api_key=api_key)
 
     def run(self, user_input: str) -> str:
         """
@@ -139,33 +135,48 @@ class StudyAgent:
         Returns:
             A plain-text string with the agent's answer.
         """
-        chat = self.model.start_chat()
+        contents = [types.Content(
+            role="user",
+            parts=[types.Part(text=user_input)]
+        )]
 
-        # Agentic loop continue until Gemini stops requesting tools
-        message = user_input
+        # Agentic loop — continue until Gemini stops requesting tools
         while True:
-            response = chat.send_message(message)
-            candidate = response.candidates[0]
-            part = candidate.content.parts[0]
+            response = self.client.models.generate_content(
+                model=MODEL,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_PROMPT,
+                    tools=GEMINI_TOOLS,
+                ),
+            )
 
-            # If Gemini called a tool, dispatch it and loop back
-            if part.function_call.name:
-                fn_name = part.function_call.name
-                fn_args = dict(part.function_call.args)
-                tool_result = _dispatch_tool(fn_name, fn_args)
+            # Append Gemini's response to conversation history
+            contents.append(response.candidates[0].content)
 
-                # Send the tool result back as a function response
-                message = genai.protos.Content(
-                    parts=[
-                        genai.protos.Part(
-                            function_response=genai.protos.FunctionResponse(
-                                name=fn_name,
-                                response={"result": tool_result},
-                            )
+            # Check if any part is a function call
+            function_calls = [
+                part for part in response.candidates[0].content.parts
+                if part.function_call is not None
+            ]
+
+            if not function_calls:
+                # No tool calls — return the text response
+                return response.text.strip() or "(No text response from agent.)"
+
+            # Dispatch all tool calls and collect results
+            tool_results = []
+            for part in function_calls:
+                fc = part.function_call
+                result = _dispatch_tool(fc.name, dict(fc.args))
+                tool_results.append(
+                    types.Part(
+                        function_response=types.FunctionResponse(
+                            name=fc.name,
+                            response={"result": result},
                         )
-                    ]
+                    )
                 )
-                continue
 
-            # No tool call Gemini is done, return the text
-            return response.text.strip() or "(No text response from agent.)"
+            # Feed tool results back into the conversation
+            contents.append(types.Content(role="user", parts=tool_results))
