@@ -124,7 +124,7 @@ pytest tests/
 | Stage | Due | Status |
 |---|---|---|
 | Step 1 — Design & planning | 24.04 | ✅ Done |
-| Step 2 — Implementation | 08.05 | 🔲 Upcoming |
+| Step 2 — Implementation | 08.05 | ✅ Done |
 | Step 3 — Testing & deployment prep | 15.05 | 🔲 Upcoming |
 | Final submission | 22.05 | 🔲 Upcoming |
 
